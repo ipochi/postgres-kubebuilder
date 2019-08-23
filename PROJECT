@@ -1,0 +1,7 @@
+version: "2"
+domain: ourpostgres.com
+repo: github.com/ipochi/kubebuilder-postgresql
+resources:
+- group: database
+  version: v1alpha1
+  kind: PostgreSQL

@@ -1,0 +1,10 @@
+apiVersion: database.ourpostgres.com/v1alpha1
+kind: PostgreSQL
+metadata:
+  name: postgresql
+spec:
+  version: "10.4"
+  replicas: 3
+  storage:
+    storageClass: openebs-hostpath
+    size: 10Gi
