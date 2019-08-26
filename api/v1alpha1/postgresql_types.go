@@ -45,8 +45,8 @@ type Storage struct {
 // PostgreSQLStatus defines the observed state of PostgreSQL
 type PostgreSQLStatus struct {
 	// the status of the StatefuleSet managed by PostgreSQL
-	StatefulSetStatus appsv1.StatefulSetStatus `json:"statefulSetStatus,omitempty"`
-
+	DeploymentStatus            appsv1.DeploymentStatus            `json:"deploymentStatus,omitempty"`
+	PersistentVolumeClaimStatus corev1.PersistentVolumeClaimStatus `json:"persistentVolumeClaimStatus,omitEmpty"`
 	// the status of the Service managed by PostgreSQL
 	ServiceStatus corev1.ServiceStatus `json:"serviceStatus,omitempty"`
 

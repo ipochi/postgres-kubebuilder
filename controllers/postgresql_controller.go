@@ -45,7 +45,7 @@ type PostgreSQLReconciler struct {
 
 func (r *PostgreSQLReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	_ = r.Log.WithValues("postgresql", req.NamespacedName)
+	log := r.Log.WithValues("postgresql", req.NamespacedName)
 
 	// Get Postgres instance
 	postgresql := &databasev1alpha1.PostgreSQL{}
@@ -55,7 +55,8 @@ func (r *PostgreSQLReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "postgres-config",
+			Name:      "postgres-config",
+			Namespace: req.Namespace,
 			// Labels: map[string]string{
 			// 	"app": "postgres",
 			// },
@@ -90,16 +91,29 @@ func (r *PostgreSQLReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "postgres-pv-claim",
+			Name:      "postgres-pv-claim",
+			Namespace: req.Namespace,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+			StorageClassName: postgresql.Spec.Storage.StorageClass,
 		},
 	}
 
+	rl := corev1.ResourceList{}
+	rl["storage"] = resource.MustParse(*postgresql.Spec.Storage.Size)
+
 	parseQuantity, err := resource.ParseQuantity(*postgresql.Spec.Storage.Size)
-	pvc.Spec.Resources.Requests = corev1.ResourceList{
-		corev1.ResourceStorage: parseQuantity,
+
+	log.Info("Log -- ", "ParseQuantity --- ", parseQuantity)
+	log.Info("Log --", "ParseQuantity RL --- ", rl["storage"])
+
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	pvc.Spec.Resources = corev1.ResourceRequirements{
+		Requests: rl,
 	}
 	_, err = ctrl.CreateOrUpdate(ctx, r.Client, pvc, func() error {
 
@@ -116,14 +130,32 @@ func (r *PostgreSQLReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 		return ctrl.SetControllerReference(postgresql, pvc, r.Scheme)
 	})
 
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	// Create Deployments to be managed by Postgresql
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "postgres-deployment",
+			Name:      "postgres-deployment",
+			Namespace: req.Namespace,
+			Labels: map[string]string{
+				"app": "postgres",
+			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: postgresql.Spec.Replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "postgres",
+				},
+			},
 			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": "postgres",
+					},
+				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						corev1.Container{
@@ -181,10 +213,15 @@ func (r *PostgreSQLReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 		return ctrl.SetControllerReference(postgresql, dep, r.Scheme)
 	})
 
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	// Generate service object managed by Postgres
 	svc := &corev1.Service{
 		ObjectMeta: ctrl.ObjectMeta{
-			Name: "postgresql",
+			Name:      "postgresql",
+			Namespace: req.Namespace,
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeNodePort,
@@ -197,6 +234,10 @@ func (r *PostgreSQLReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 				"app": "postgres",
 			},
 		},
+	}
+
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// either create or update the service as appropriate
@@ -213,6 +254,20 @@ func (r *PostgreSQLReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 		svc.Labels = labels
 		return ctrl.SetControllerReference(postgresql, svc, r.Scheme)
 	})
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Update the MongoDB status so it gets published to users
+	postgresql.Status.DeploymentStatus = dep.Status
+	postgresql.Status.ServiceStatus = svc.Status
+	postgresql.Status.PersistentVolumeClaimStatus = pvc.Status
+	postgresql.Status.ClusterIP = svc.Spec.ClusterIP
+
+	if err := r.Status().Update(ctx, postgresql); err != nil {
+		return ctrl.Result{}, err
+	}
+	log.Info("updated mongo intance")
 
 	return ctrl.Result{}, err
 }

@@ -2,6 +2,7 @@ apiVersion: database.ourpostgres.com/v1alpha1
 kind: PostgreSQL
 metadata:
   name: postgresql
+  # namespace: postgres-operator
 spec:
   version: "10.4"
   replicas: 3
