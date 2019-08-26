@@ -4,7 +4,7 @@ metadata:
   name: postgresql
   # namespace: postgres-operator
 spec:
-  version: "10.4"
+  version: "postgres:10.4"
   replicas: 3
   storage:
     storageClass: openebs-hostpath

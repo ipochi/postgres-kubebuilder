@@ -95,7 +95,7 @@ func (r *PostgreSQLReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 			Namespace: req.Namespace,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			StorageClassName: postgresql.Spec.Storage.StorageClass,
 		},
 	}
@@ -160,7 +160,7 @@ func (r *PostgreSQLReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 					Containers: []corev1.Container{
 						corev1.Container{
 							Name:  "postgres",
-							Image: "postgres" + *postgresql.Spec.Version,
+							Image: *postgresql.Spec.Version,
 							Ports: []corev1.ContainerPort{
 								corev1.ContainerPort{
 									ContainerPort: 5432,
